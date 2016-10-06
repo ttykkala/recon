@@ -61,3 +61,5 @@ unify histogram implementation usage
 cleanup 
 
 support for cpu based computation also
+
+all parameters into a text file
