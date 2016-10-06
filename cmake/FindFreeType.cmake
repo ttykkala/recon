@@ -1,0 +1,46 @@
+#
+# Try to find Freetype library and include path.
+# Once done this will define
+#
+# FREETYPE_FOUND
+# FREETYPE_INCLUDE_DIR
+# FREETYPE_LIBRARY
+#
+
+find_path(FREETYPE_INCLUDE_DIR ft2build.h 
+	PATHS "${FREETYPE_ROOT_DIR}/include/freetype2"
+	DOC "The freetype include path"
+ 	NO_SYSTEM_ENVIRONMENT_PATH
+	NO_DEFAULT_PATH
+)
+
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+
+FIND_LIBRARY( FREETYPE_LIBRARY
+NAMES libfreetype.so
+PATHS "${FREETYPE_ROOT_DIR}/lib"
+DOC "The freetype library"
+NO_SYSTEM_ENVIRONMENT_PATH
+NO_DEFAULT_PATH)
+
+else()
+
+#FIND_LIBRARY( FREETYPE_LIBRARY
+#NAMES freetype255MT
+#PATHS "${FREETYPE_ROOT_DIR}/lib/x64/win64"
+#DOC "The freetype library"
+#NO_SYSTEM_ENVIRONMENT_PATH
+#NO_DEFAULT_PATH)
+
+endif()
+
+
+message(${FREETYPE_LIBRARY})
+
+IF (FREETYPE_INCLUDE_DIR)
+SET( FREETYPE_FOUND 1 CACHE STRING "Set to 1 if GLEW is found, 0 otherwise")
+ELSE (FREETYPE_INCLUDE_DIR)
+SET( FREETYPE_FOUND 0 CACHE STRING "Set to 1 if GLEW is found, 0 otherwise")
+ENDIF (FREETYPE_INCLUDE_DIR)
+
+MARK_AS_ADVANCED( FREETYPE_FOUND )

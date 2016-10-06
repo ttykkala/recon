@@ -1,0 +1,66 @@
+/*
+realview
+Copyright (c) 2014, Tommi Tykkälä, All rights reserved.
+
+This source code is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This source code is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this source code.
+*/
+
+#include <GL/glew.h>
+//#include <opencv2/opencv.hpp>
+#include <screenshot.h>
+#include <string.h>
+#include <stdio.h>
+
+ScreenShot::ScreenShot(const char *basepath, int x0, int y0, int width, int height) {
+    shotIndex = 0;
+    strncpy(&basePath[0],basepath,512);
+    screenShot = new unsigned char[width*height*4];
+    flippedImage = new unsigned char[width*height*3];
+    this->x0 = x0; this->y0 = y0;
+    this->width = width; this->height = height;
+}
+ScreenShot::~ScreenShot() {
+    delete[] screenShot;
+    delete[] flippedImage;
+}
+
+void ScreenShot::writePPM(const char *fn, int dimx, int dimy, unsigned char *src) {
+    FILE *fp = fopen(fn, "wb"); /* b - binary mode */
+    fprintf(fp, "P6\n%d %d\n255\n", dimx, dimy);
+    fwrite(src,dimx*dimy*3,1,fp);
+    fclose(fp);
+}
+
+void ScreenShot::flip(unsigned char *srcData, unsigned char *dstData) {
+    int pitch = width*3;
+    unsigned char *dstRow = &dstData[(height-1)*pitch];
+    unsigned char *srcRow = &srcData[0];
+    for (int j = 0; j < height; j++) {
+        unsigned char *dstRow = &dstData[(height-1-j)*pitch];
+        unsigned char *srcRow = &srcData[j*pitch];
+        memcpy(dstRow,srcRow,pitch);
+    }
+}
+
+void ScreenShot::save() {
+    char buf[1024];
+    sprintf(buf,"%s/screenshot%04d.ppm",&basePath[0],shotIndex);
+   // printf("saving %s...\n",buf);
+    glReadPixels(x0,y0,width,height,GL_RGB,GL_UNSIGNED_BYTE,screenShot);
+    flip(screenShot,flippedImage);
+    writePPM(buf,width,height,&flippedImage[0]);
+    //imwrite(buf,flippedImage);
+    shotIndex++;
+}
+
