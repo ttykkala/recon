@@ -36,7 +36,8 @@ open the project with qtcreator and run it
 
 cheers, 
 
-tommi t. 
+tommi m. tykkälä / ttykkala@gmail.com
+(also few demo videos at https://www.youtube.com/user/ttykkala9)
 
 # credits 
 
