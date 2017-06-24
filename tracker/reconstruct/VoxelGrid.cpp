@@ -131,6 +131,7 @@ VoxelGrid::initialize(bool openglContext)
     checkCudaErrors(cudaMalloc((void **)&cudaRayCastSmoothXYZImage, sizeTexData)); checkCudaErrors(cudaMemset(cudaRayCastSmoothXYZImage,0, sizeTexData));
 
     sdkCreateTimer(&m_timer);
+    printf("init voxelgrid\n");
     setParameters(&m_params);
     //identityIndex();
     m_bInitialized = true;
@@ -287,6 +288,7 @@ void VoxelGrid::setCameraParams(float *Tcur, float *K) {
 }
 
 void VoxelGrid::update(float *Tcur, float *K) {
+
     setCameraParams(Tcur,K);
     m_distMap.map(); m_tsdf.map();
     float2 *tsdf   = m_tsdf.getDevicePtr();

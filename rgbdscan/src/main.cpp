@@ -337,16 +337,15 @@ void release()
     // signal to threads: exit
     g_killThreads = true;
     // let barriers through:
-    barrier->disable();
-    // cleanup
-    cleanupCudaDevices();
-    // wait threads to die:
+    if (barrier) barrier->disable();
+    if (cudaContextExists) cleanupCudaDevices();
+
+   // wait threads to die:
     while (trackingThreadAlive()) { sleepMs(50); }
 
     SAFE_RELEASE(renderer);
     SAFE_RELEASE(screenShot);
     SAFE_RELEASE(fileSource);
-
 
     fbos.release();
 
@@ -763,8 +762,7 @@ void blitToPrimaryScreen() {
     glBlitFramebufferEXT(0, 0, texWidth,texHeight, 0, winHeight/2, winWidth/2, winHeight, GL_COLOR_BUFFER_BIT , GL_LINEAR);
 }*/
 
-void uploadCudaTexture(void *cudaDevData, int sizeTexBytes, cudaGraphicsResource *cudaTexture) {
-
+void uploadCudaTexture(void *cudaDevData, int sizeTexBytes, cudaGraphicsResource *cudaTexture) {    
     cudaArray *texture_ptr;
     cudaThreadSynchronize();
     checkCudaErrors(cudaGraphicsMapResources(1, &cudaTexture, 0));
@@ -927,6 +925,7 @@ void updateVoxelGrid() {
     if (!renderer) return;
     if (!barrier) return;
     if (!photoTracker) return;
+    if (!cudaContextExists) return;
     voxelGrid->preprocessMeasurementRGBD(rgbdFramePrev,RENDER_TARGET_WIDTH,RENDER_TARGET_HEIGHT);
 //    voxelGrid->preprocessMeasurementRGBD(rgbdFrame,RENDER_TARGET_WIDTH,RENDER_TARGET_HEIGHT);
 
@@ -957,6 +956,7 @@ void updateVoxelGrid() {
     }
     barrier->sync();
 
+
     if (showErrorImage) {
         photoTracker->updateErrorImage();
         uploadCudaTexture(photoTracker->getDebugImage1C(layer),(RENDER_TARGET_WIDTH>>layer)*(RENDER_TARGET_HEIGHT>>layer)*sizeof(float),cudaDebugTexture1C[layer]);
@@ -985,12 +985,15 @@ void updateVoxelGrid() {
         photoTracker->setCurrentImage(rgbdFrame);
     }
 
+
 }
 
-void updateFrame(bool newDataset) {
-    if (!voxelGrid) return;
-    if (!renderer) return;
-    if (!fbos.count()) return;
+int updateFrame(bool newDataset) {
+    if (!voxelGrid) return 0;
+    if (!renderer) return 0;
+    if (!fbos.count()) return 0;
+    if (rgbdFrame == NULL) return 0;
+    if (rgbdFramePrev == NULL) return 0;
 
     fbos.bind(RENDER_TARGET_RAW);
 
@@ -1022,20 +1025,24 @@ void updateFrame(bool newDataset) {
     currentFrame++;
 
     cudaStreamSynchronize(0);
+
     cudaArray *mappedFrame = NULL;
     fbos.lock(RENDER_TARGET_RAW,&mappedFrame);
+
+
     // save the previous rgbdFrame to get frame delay - 1 for voxelupdates/raycasting
     if (!newDataset) {
-        cudaMemcpy2DArrayToArray(rgbdFramePrev,0,0,rgbdFrame,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice);
+        checkCudaErrors(cudaMemcpy2DArrayToArray(rgbdFramePrev,0,0,rgbdFrame,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice));
         // update rgbdFrame to phototracker as the "current frame"
-        cudaMemcpy2DArrayToArray(rgbdFrame,0,0,mappedFrame,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice);
+        checkCudaErrors(cudaMemcpy2DArrayToArray(rgbdFrame,0,0,mappedFrame,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice));
     } else {
         // update rgbdFrame to phototracker as the "current frame"
-        cudaMemcpy2DArrayToArray(rgbdFramePrev,0,0,mappedFrame,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice);
-        cudaMemcpy2DArrayToArray(rgbdFrame,0,0,mappedFrame,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice);
+        checkCudaErrors(cudaMemcpy2DArrayToArray(rgbdFramePrev,0,0,mappedFrame,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice));
+        checkCudaErrors(cudaMemcpy2DArrayToArray(rgbdFrame,0,0,rgbdFramePrev,0,0,RENDER_TARGET_WIDTH*sizeof(float4),RENDER_TARGET_HEIGHT,cudaMemcpyDeviceToDevice));
     }
-    cudaStreamSynchronize(0);
+//    cudaStreamSynchronize(0);
     fbos.unlock();
+    return 1;
 }
 
 void updateKeys() {
@@ -1086,12 +1093,12 @@ void update() {
         updateKeys();
         updateCamera();
     }
-    if (photoTracker && photoTracker->isActive()) {
-        updateFrame(restartTrackingFlag);
-        restartTrackingFlag = false;
+
+    if (photoTracker && photoTracker->isActive() && cudaContextExists) {
+        if (updateFrame(restartTrackingFlag))
+            restartTrackingFlag = false;
     }
     updateVoxelGrid();
-
     updateFbos();
 
 }
@@ -1099,6 +1106,7 @@ void update() {
 // render all subwindows
 void renderFrame()
 {
+
     fbos.unbind();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     for (size_t i = 0; i < glWindows.size(); i++) glWindows[i]->render();
@@ -1227,14 +1235,13 @@ int glLoader() {
         photoTracker->setReferenceUpdating(true);
         photoTracker->setFilteredReference(false);//true);
         photoTracker->setIncrementalMode(true);
-        if (cudaContextExists && photoTracker && voxelGrid == NULL) {
+        if (photoTracker && voxelGrid == NULL) {
             voxelGridArray[0] = createVoxelGrid(g_gridResolution,true,0,calibKinect.getMinDist(),calibKinect.getMaxDist());
             if (relativeTSDF) {
                 voxelGridArray[1] = createVoxelGrid(g_gridResolution,true,0,calibKinect.getMinDist(),calibKinect.getMaxDist());
             }
             activeGrid = 0;
             voxelGrid = voxelGridArray[activeGrid];
-
             loadTextures();
             showLoadingScreen = false;
         }

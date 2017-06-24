@@ -19,6 +19,7 @@ limitations under the License.
 // - zmaps used instead of distances (depthScaled)
 // - multiple iterations allowed for intersection point estimation
 
+
 #include <helper_cuda.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -49,7 +50,7 @@ extern "C"
     void setParameters(SimParams *hostParams)
     {
         // copy parameters to constant memory
-        checkCudaErrors(cudaMemcpyToSymbol(params, hostParams, sizeof(SimParams)));
+         checkCudaErrors(cudaMemcpyToSymbol(params, hostParams, sizeof(SimParams)));
     }
 
     //Round a / b to nearest higher integer value
